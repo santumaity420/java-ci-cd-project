@@ -39,4 +39,4 @@ InsuredAssurance_CICD/
 
 ## Notes
 - The workflow is set to run on `push` to `main` and via manual `workflow_dispatch`.
-- Adjust Java version and Maven cache as required.
+- Adjust Java version and Maven cache as required.  
