@@ -1,0 +1,46 @@
+
+pipeline {
+  agent any
+  environment {
+    JAVA_HOME = tool name: 'JDK17', type: 'jdk'
+    MAVEN_HOME = tool name: 'M3', type: 'maven'
+    PATH = "$JAVA_HOME/bin:$MAVEN_HOME/bin:$PATH"
+    TOMCAT_URL = credentials('TOMCAT_URL')
+    TOMCAT_USER = credentials('TOMCAT_USER')
+    TOMCAT_PASS = credentials('TOMCAT_PASS')
+  }
+  parameters {
+    string(name: 'GIT_SHA', defaultValue: '', description: 'Commit SHA from GitHub Actions')
+    string(name: 'BRANCH', defaultValue: 'main', description: 'Branch name')
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+    stage('Build (Maven)') {
+      steps {
+        dir('app') {
+          sh 'mvn -B -DskipTests clean package'
+        }
+      }
+    }
+    stage('Deploy to Tomcat') {
+      steps {
+        script {
+          sh '''
+          WAR=$(ls app/target/*.war | head -n1)
+          APP_NAME=insured-assurance
+          echo "Deploying $WAR to Tomcat"
+          curl -u "$TOMCAT_USER:$TOMCAT_PASS" --upload-file "$WAR" "$TOMCAT_URL/manager/text/deploy?path=/$APP_NAME&update=true"
+          '''
+        }
+      }
+    }
+  }
+  post {
+    success { echo 'Deployment successful.' }
+    failure { echo 'Deployment failed.' }
+  }
+}

@@ -1,0 +1,46 @@
+
+name: Maven CI + Trigger Jenkins
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Temurin JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Build with Maven
+        working-directory: app
+        run: mvn -B -DskipTests=false clean package
+
+      - name: Archive WAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: insured-assurance-war
+          path: app/target/*.war
+
+      - name: Trigger Jenkins deployment
+        env:
+          JENKINS_URL: ${{ secrets.JENKINS_URL }}
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ secrets.JENKINS_API_TOKEN }}
+          JENKINS_JOB: ${{ secrets.JENKINS_JOB }}
+        run: |
+          set -e
+          if [ -z "$JENKINS_URL" ] || [ -z "$JENKINS_USER" ] || [ -z "$JENKINS_API_TOKEN" ] || [ -z "$JENKINS_JOB" ]; then
+            echo "Missing Jenkins secrets. Please set JENKINS_URL, JENKINS_USER, JENKINS_API_TOKEN, JENKINS_JOB" >&2
+            exit 1
+          fi
+          CRUMB=$(curl -s -u "$JENKINS_USER:$JENKINS_API_TOKEN" "$JENKINS_URL/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)" || true)
+          curl -s -X POST -u "$JENKINS_USER:$JENKINS_API_TOKEN" -H "$CRUMB" "$JENKINS_URL/job/$JENKINS_JOB/buildWithParameters" --data-urlencode "GIT_SHA=${{ github.sha }}" --data-urlencode "BRANCH=${{ github.ref_name }}"
